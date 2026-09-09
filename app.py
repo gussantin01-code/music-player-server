@@ -240,10 +240,10 @@ bot_app = None
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-       "",
+       "Open Player \/",
         reply_markup={
             "inline_keyboard": [[{
-                "text": "",
+                "text": "Player",
                 "web_app": {"url": WEBAPP_URL}
             }]]
         }
