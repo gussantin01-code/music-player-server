@@ -240,13 +240,10 @@ bot_app = None
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Привет! Я музыкальный бот.\n\n"
-        "Отправь мне аудиофайлы — я добавлю их в твой плеер.\n"
-        "Когда закончишь — напиши /ready\n\n"
-        "Открой плеер:",
+       "",
         reply_markup={
             "inline_keyboard": [[{
-                "text": "Открыть плеер",
+                "text": "",
                 "web_app": {"url": WEBAPP_URL}
             }]]
         }
