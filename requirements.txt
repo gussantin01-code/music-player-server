@@ -1,0 +1,5 @@
+flask
+python-telegram-bot[webhooks]
+python-dotenv
+gunicorn
+flask-cors
