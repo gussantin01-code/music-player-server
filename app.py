@@ -239,11 +239,12 @@ bot_app = None
 
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # \u2063 - это невидимый символ, сообщения будет казаться пустым
     await update.message.reply_text(
-       "Open Player \/",
+        "\u2063",
         reply_markup={
             "inline_keyboard": [[{
-                "text": "Player",
+                "text": "Открыть плеер",
                 "web_app": {"url": WEBAPP_URL}
             }]]
         }
