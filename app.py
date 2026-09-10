@@ -1,3 +1,4 @@
+import time
 import os
 import logging
 import asyncio
@@ -241,6 +242,17 @@ def api_delete_playlist(name):
 
 
 @flask_app.route("/api/playlist/<name>/rename", methods=["POST"])
+@flask_app.post("/api/playlist/<name>/add_track")
+def api_add_track(name):
+    uid = user_id_from_req()
+    if not uid:
+        return jsonify({"error": "unauthorized"}), 401
+    body = request.json or {}
+    track = body.get("track")
+    if not track:
+        return jsonify({"error": "track required"}), 400
+    ok = db.add_track(uid, name, track)
+    return jsonify({"ok": ok})
 def api_rename_playlist(name):
     user_id = get_user_id_from_request()
     if not user_id:
@@ -285,7 +297,45 @@ def api_pending():
 
 
 @flask_app.route("/api/pending/apply", methods=["POST"])
-def api_apply_pending():
+@flask_app.post("/api/upload/audio")
+def api_upload_audio():
+    uid = user_id_from_req()
+    if not uid:
+        return jsonify({"error": "unauthorized"}), 401
+
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "file required"}), 400
+
+    # Сохраняем во временный файл
+    tmp_path = "/tmp/upload_" + str(uid) + "_" + str(int(time.time()))
+    f.save(tmp_path)
+
+    # Отправляем самому пользователю в "Saved Messages" через бота,
+    # чтобы получить file_id Telegram (иначе мы не сможем потом стримить)
+    # Важно: бот может писать пользователю только если он уже нажал /start.
+    bot = Bot(BOT_TOKEN)
+    l = loop()
+
+    async def send_and_get():
+        msg = await bot.send_audio(chat_id=uid, audio=open(tmp_path, "rb"))
+        a = msg.audio
+        return {
+            "title": a.title or (f.filename or "Track"),
+            "artist": a.performer or "",
+            "album": "",
+            "duration": a.duration or 0,
+            "file_id": a.file_id,
+            "thumb_id": a.thumbnail.file_id if a.thumbnail else None,
+        }
+
+    try:
+        track = l.run_until_complete(send_and_get())
+        db.add_pending_track(uid, track)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    def api_apply_pending():
     user_id = get_user_id_from_request()
     if not user_id:
         return jsonify({"error": "unauthorized"}), 401
