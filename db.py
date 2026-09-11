@@ -33,10 +33,16 @@ def get_user(user_id: int) -> dict:
             all_data[key] = {
                 "playlists": {},
                 "pending_tracks": [],
-                "pending_playlist": None,
+                "catalog": [],
             }
             _save_all(all_data)
-        return all_data[key]
+        user = all_data[key]
+        # migrate old data
+        if "catalog" not in user:
+            user["catalog"] = []
+            all_data[key] = user
+            _save_all(all_data)
+        return user
 
 
 def save_user(user_id: int, user_data: dict):
@@ -49,18 +55,14 @@ def save_user(user_id: int, user_data: dict):
 # ── Плейлисты ──
 
 def get_playlists(user_id: int) -> dict:
-    user = get_user(user_id)
-    return user.get("playlists", {})
+    return get_user(user_id).get("playlists", {})
 
 
 def create_playlist(user_id: int, name: str, cover_file_id: str = None) -> bool:
     user = get_user(user_id)
     if name in user["playlists"]:
         return False
-    user["playlists"][name] = {
-        "cover_file_id": cover_file_id,
-        "tracks": [],
-    }
+    user["playlists"][name] = {"cover_file_id": cover_file_id, "tracks": []}
     save_user(user_id, user)
     return True
 
@@ -118,12 +120,10 @@ def remove_track(user_id: int, playlist_name: str, track_index: int) -> bool:
 def get_tracks(user_id: int, playlist_name: str) -> list:
     user = get_user(user_id)
     pl = user["playlists"].get(playlist_name)
-    if pl:
-        return pl.get("tracks", [])
-    return []
+    return pl.get("tracks", []) if pl else []
 
 
-# ── Буфер (pending) — временное хранение треков от бота ──
+# ── Pending ──
 
 def add_pending_track(user_id: int, track: dict):
     user = get_user(user_id)
@@ -132,23 +132,51 @@ def add_pending_track(user_id: int, track: dict):
 
 
 def get_pending_tracks(user_id: int) -> list:
-    user = get_user(user_id)
-    return user.get("pending_tracks", [])
+    return get_user(user_id).get("pending_tracks", [])
 
 
 def clear_pending(user_id: int):
     user = get_user(user_id)
     user["pending_tracks"] = []
-    user["pending_playlist"] = None
     save_user(user_id, user)
 
 
-def set_pending_playlist(user_id: int, playlist_name: str):
+# ── Каталог ──
+
+def get_catalog(user_id: int) -> list:
+    return get_user(user_id).get("catalog", [])
+
+
+def add_to_catalog(user_id: int, track: dict):
+    """Добавить трек в каталог (без дублей по file_id)"""
     user = get_user(user_id)
-    user["pending_playlist"] = playlist_name
+    existing_ids = {t["file_id"] for t in user["catalog"]}
+    if track["file_id"] not in existing_ids:
+        user["catalog"].append(track)
+        save_user(user_id, user)
+
+
+def load_pending_to_catalog(user_id: int) -> int:
+    """Перенести все pending треки в каталог, очистить pending. Вернуть кол-во добавленных."""
+    user = get_user(user_id)
+    pending = user.get("pending_tracks", [])
+    existing_ids = {t["file_id"] for t in user.get("catalog", [])}
+    added = 0
+    for t in pending:
+        if t["file_id"] not in existing_ids:
+            user["catalog"].append(t)
+            existing_ids.add(t["file_id"])
+            added += 1
+    user["pending_tracks"] = []
     save_user(user_id, user)
+    return added
 
 
-def get_pending_playlist(user_id: int) -> str:
+def remove_from_catalog(user_id: int, file_id: str) -> bool:
     user = get_user(user_id)
-    return user.get("pending_playlist")
+    before = len(user["catalog"])
+    user["catalog"] = [t for t in user["catalog"] if t["file_id"] != file_id]
+    if len(user["catalog"]) < before:
+        save_user(user_id, user)
+        return True
+    return False
